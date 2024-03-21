@@ -1,4 +1,5 @@
 import os
+import requests
 from urllib.parse import unquote_plus
 from flask import Flask, jsonify, request
 from flask import render_template
@@ -57,6 +58,37 @@ def youtube():
         video_captions=video_captions)
 
 
+@app.route("/jw")
+def jw_payer():
+    try:
+        video_id = request.args['id']
+    except Exception as e:
+        edata = "Please parse ?id= when calling the api"
+        return edata
+    try:
+        encypted = request.args['en']
+    except Exception as e:
+        encypted = 1
+    if encypted == "0":
+        video_id = video_id
+    else:
+        try:
+            video_id = b64_to_str(video_id)
+        except:
+            return "<font color=red size=15>Wrong Video ID</font> <br> ask at @JV_Community in Telegram"
+    jw_url = "https://cdn.jwplayer.com/v2/media"
+    video_response = requests.get(f"{jw_url}/{video_id}")
+    if video_response.status_code != 200:
+        return "<font color=red size=20>Wrong Video ID</font>"
+    video = video_response.json()
+    video_url = video["playlist"][0]["sources"][0]["file"]
+    track_url = video["playlist"][0]["tracks"][0]["file"]
+    return render_template(
+        "m3u8.html",
+        video_url=video_url,
+        track_url=track_url,
+    )
+
 @app.route("/play")
 def play():
     try:
@@ -86,4 +118,26 @@ def play():
         track_url=track_url,
     )
 
-
+@app.route("/m3u8")
+def m3u8():
+    try:
+        video_url = request.args['id']
+    except Exception as e:
+        edata = "Please parse ?id= when calling the api"
+        return edata
+    try:
+        encypted = request.args['en']
+    except Exception as e:
+        encypted = 1
+    if encypted == "0":
+        video_url = video_url
+    else:
+        try:
+            video_url = b64_to_str(video_url)
+        except:
+            return "<font color=red size=15>Wrong Video ID</font> <br> sorry"
+    return render_template(
+        "m3u8.html",
+        video_url=video_url,
+        track_url=video_url
+    )
