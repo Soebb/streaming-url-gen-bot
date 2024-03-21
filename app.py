@@ -1,5 +1,4 @@
 import os
-import requests
 from urllib.parse import unquote_plus
 from flask import Flask, jsonify, request
 from flask import render_template
@@ -17,7 +16,7 @@ def b64_to_str(b64: str) -> str:
 
 @app.route("/")
 def homepage():
-    return render_template("index1.html")
+    return "Hello.."
 
 @app.route("/yt")
 def youtube():
@@ -87,7 +86,4 @@ def play():
         track_url=track_url,
     )
 
-
-if __name__ == "__main__":
-    app.run(debug=True)
 
