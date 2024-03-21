@@ -38,10 +38,11 @@ async def start(bot, update):
 @Bot.on_message(filters.private & filters.text)
 async def st(_, m):
     vid_url = m.text
-    if
+
+    if vid_url[vid_url-4:].startswith("."):
         url = https://{app_url}/play?id=" + vid_url
     else:
-        url = https://{app_url}/play?id=" + vid_url
+        url = https://{app_url}/yt?id=" + vid_url
 
     await m.reply(url)
     
