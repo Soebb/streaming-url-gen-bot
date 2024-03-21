@@ -1,0 +1,7 @@
+pyrogram
+tgcrypto
+flask
+youtube_dl
+requests
+gunicorn
+urllib3
