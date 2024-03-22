@@ -1,7 +1,7 @@
 pyrogram
 tgcrypto
 flask
-youtube_dl
+yt_dlp
 requests
 gunicorn
 urllib3
