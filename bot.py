@@ -39,7 +39,7 @@ async def start(bot, update):
 async def st(_, m):
     vid_url = m.text
 
-    if vid_url[vid_url-4:].startswith("."):
+    if vid_url[len(vid_url)-4:].startswith("."):
         url = "https://{app_url}/play?id=" + vid_url
     else:
         url = "https://{app_url}/yt?id=" + vid_url
