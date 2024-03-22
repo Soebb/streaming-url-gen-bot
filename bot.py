@@ -14,7 +14,7 @@ Bot = Client(
 START_TXT = """
 Hi {}, I'm streaming link gen bot.
 
-Send a YouTube video url or a direct download link of a video."
+Send a YouTube video url or a direct download link of a video.
 """
 
 START_BTN = InlineKeyboardMarkup(
@@ -40,9 +40,9 @@ async def st(_, m):
     vid_url = m.text
 
     if vid_url[vid_url-4:].startswith("."):
-        url = https://{app_url}/play?id=" + vid_url
+        url = "https://{app_url}/play?id=" + vid_url
     else:
-        url = https://{app_url}/yt?id=" + vid_url
+        url = "https://{app_url}/yt?id=" + vid_url
 
     await m.reply(url)
     
