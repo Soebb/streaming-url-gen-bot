@@ -3,7 +3,7 @@ import requests
 from urllib.parse import unquote_plus
 from flask import Flask, jsonify, request
 from flask import render_template
-from youtube_dl import YoutubeDL
+from yt_dlp import YoutubeDL
 from base64 import standard_b64decode
 
 app = Flask(__name__)
