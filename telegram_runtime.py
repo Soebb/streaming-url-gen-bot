@@ -1,4 +1,4 @@
-"""Shared Telegram client state for HTTP handlers."""
+"""Shared Pyrogram client state for Telegram media retrieval."""
 
 import asyncio
 import logging
@@ -15,8 +15,9 @@ Bot = Client(
     bot_token=os.environ["BOT_TOKEN"],
     api_id=int(os.environ["API_ID"]),
     api_hash=os.environ["API_HASH"],
-    # Process pending updates rather than silently discarding them at startup.
-    skip_updates=False,
+    # Bot updates are received through Bot API long polling in bot.py.
+    # Disable MTProto updates; this client is used for get_messages/stream_media.
+    no_updates=True,
 )
 
 BOT_LOOP = None
@@ -25,27 +26,17 @@ BOT_ERROR = None
 
 
 async def start_bot():
-    """Start the Telegram client on the main asyncio loop."""
+    """Start the Pyrogram client on the main asyncio loop."""
     global BOT_LOOP, BOT_ERROR
-
     try:
         BOT_LOOP = asyncio.get_running_loop()
         await Bot.start()
-        logger.info("Telegram client started; attempting update-gap recovery.")
-
-        # The original Pyrogram 2.0.106 only logged UpdatesTooLong and did
-        # not recover the missing update state. Pyrofork exposes recover_gaps().
-        recovered = await Bot.recover_gaps()
-        logger.info(
-            "Telegram update recovery finished: %s messages, %s other updates.",
-            recovered[0],
-            recovered[1],
-        )
+        logger.info("Pyrogram media client started (MTProto updates disabled).")
         BOT_READY.set()
     except Exception as exc:
         BOT_ERROR = exc
         BOT_READY.set()
-        logger.exception("Telegram client startup/update recovery failed")
+        logger.exception("Pyrogram media client startup failed")
         raise
 
 
