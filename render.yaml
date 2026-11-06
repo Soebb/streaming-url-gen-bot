@@ -2,7 +2,7 @@ services:
   - type: web
     name: streaming-url-gen-bot
     runtime: docker
-    plan: starter
+    plan: free
     region: frankfurt
     branch: feature/render-deployment
     dockerfilePath: ./Dockerfile
@@ -14,8 +14,6 @@ services:
         value: "10000"
       - key: PYTHONUNBUFFERED
         value: "1"
-      - key: MEDIA_DIR
-        value: /var/data/media
       - key: MAX_VIDEO_SIZE
         value: "2147483648"
       - key: API_ID
@@ -24,7 +22,3 @@ services:
         sync: false
       - key: BOT_TOKEN
         sync: false
-    disk:
-      name: telegram-video-storage
-      mountPath: /var/data
-      sizeGB: 10
