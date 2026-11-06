@@ -10,7 +10,6 @@ import logging
 import os
 import re
 import threading
-import time
 from urllib.parse import quote_plus, urlparse
 
 import requests
@@ -78,7 +77,7 @@ def handle_message(message):
         "video" if message.get("video") else "document" if message.get("document") else "text" if text else "other",
     )
 
-    if text.split(maxsplit=1)[0].split("@")[0] == "/start" if text else False:
+    if text and text.split(maxsplit=1)[0].split("@")[0] == "/start":
         first_name = (message.get("from") or {}).get("first_name") or "there"
         reply(
             chat_id,
