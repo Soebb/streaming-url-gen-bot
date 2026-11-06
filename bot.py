@@ -9,7 +9,7 @@ from pyrogram import Client, filters
 from pyrogram.types import InlineKeyboardMarkup, InlineKeyboardButton
 
 
-APP_URL = os.environ.get("DOPRAX_APP_URL", "").strip()
+APP_URL = (os.environ.get("DOPRAX_APP_URL") or os.environ.get("RENDER_EXTERNAL_URL") or "").strip()
 MEDIA_DIR = os.environ.get(
     "MEDIA_DIR", os.path.join(os.path.dirname(os.path.abspath(__file__)), "media")
 )
