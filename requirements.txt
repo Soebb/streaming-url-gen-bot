@@ -1,7 +1,8 @@
-pyrogram
+pyrogram==2.0.106
 tgcrypto
 flask
 yt_dlp
 requests
 gunicorn
+waitress
 urllib3
