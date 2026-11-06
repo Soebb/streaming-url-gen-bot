@@ -1,14 +1,13 @@
-"""Application entry point: Pyrogram owns the main asyncio loop."""
+"""Application entry point: Pyrogram media client + Bot API polling."""
 
 import asyncio
 import logging
 import os
 import threading
 
-import bot  # Register message handlers before starting Pyrogram.
+import bot
 from app import app
-from telegram_runtime import start_bot, stop_bot, BOT_READY, BOT_ERROR
-
+from telegram_runtime import start_bot, stop_bot
 from waitress import serve
 
 
@@ -26,9 +25,15 @@ def run_http_server():
 
 
 async def main():
-    logger.info("Starting Telegram bot...")
+    logger.info("Starting Pyrogram media client...")
     await start_bot()
-    logger.info("Telegram bot connected and polling for updates.")
+
+    polling_thread = threading.Thread(
+        target=bot.polling_loop,
+        name="telegram-bot-api-polling",
+        daemon=True,
+    )
+    polling_thread.start()
 
     http_thread = threading.Thread(
         target=run_http_server,
@@ -36,13 +41,13 @@ async def main():
         daemon=True,
     )
     http_thread.start()
-    logger.info("HTTP server thread started.")
+    logger.info("HTTP server and Telegram Bot API polling threads started.")
 
     try:
-        # Keep the main asyncio loop alive; Pyrogram receives updates here.
         await asyncio.Event().wait()
     finally:
-        logger.info("Stopping Telegram bot...")
+        logger.info("Stopping Telegram services...")
+        bot.POLLING_STOP.set()
         await stop_bot()
 
 
