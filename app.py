@@ -11,7 +11,9 @@ from flask import Flask, request, abort, Response, render_template
 from werkzeug.utils import secure_filename
 from yt_dlp import YoutubeDL
 
-from telegram_runtime import Bot, BOT_LOOP, BOT_READY
+import telegram_runtime
+
+Bot = telegram_runtime.Bot
 from telegram_stream import decode_stream_token
 
 
@@ -24,9 +26,9 @@ def b64_to_str(b64: str) -> str:
 
 
 def _submit(coro, timeout=60):
-    if not BOT_READY.wait(timeout) or BOT_LOOP is None:
+    if not telegram_runtime.BOT_READY.wait(timeout) or telegram_runtime.BOT_LOOP is None:
         raise RuntimeError("Telegram bot is not ready")
-    return asyncio.run_coroutine_threadsafe(coro, BOT_LOOP).result(timeout=timeout)
+    return asyncio.run_coroutine_threadsafe(coro, telegram_runtime.BOT_LOOP).result(timeout=timeout)
 
 
 def _raw_method(method):
