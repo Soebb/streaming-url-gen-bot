@@ -3,7 +3,7 @@ import mimetypes
 import os
 import re
 import uuid
-from urllib.parse import quote_plus
+from urllib.parse import quote_plus, urlparse
 
 from pyrogram import Client, filters
 from pyrogram.types import InlineKeyboardMarkup, InlineKeyboardButton
@@ -122,8 +122,8 @@ async def st(_, m):
         await m.reply_text("The bot administrator has not configured DOPRAX_APP_URL.")
         return
 
-    if vid_url.lower().endswith((".mp4", ".mkv", ".mov", ".webm", ".avi", ".m4v")):
-        url = f"{base_url}/play?id=" + quote_plus(vid_url)
+    if os.path.splitext(urlparse(vid_url).path)[1].lower() in ALLOWED_EXTENSIONS:
+        url = f"{base_url}/play?id=" + quote_plus(vid_url) + "&en=0"
     else:
         url = f"{base_url}/yt?id=" + quote_plus(vid_url)
 
