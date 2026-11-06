@@ -107,9 +107,13 @@ def telegram_media(token):
 
     start, end, status_code = parsed_range
     content_length = end - start + 1
-    mime_type = getattr(media, "mime_type", None) or mimetypes.guess_type(
-        getattr(media, "file_name", "") or ""
-    )[0] or "application/octet-stream"
+    file_name = getattr(media, "file_name", "") or "video"
+    mime_type = getattr(media, "mime_type", None) or ""
+    if not mime_type.startswith(("video/", "audio/")):
+        guessed_type = mimetypes.guess_type(file_name)[0]
+        if guessed_type:
+            mime_type = guessed_type
+    mime_type = mime_type or "application/octet-stream"
     filename = secure_filename(getattr(media, "file_name", None) or "video")
     headers = {
         "Content-Type": mime_type,
