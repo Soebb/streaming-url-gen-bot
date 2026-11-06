@@ -1,4 +1,5 @@
 import base64
+import logging
 import os
 import re
 from urllib.parse import quote_plus, urlparse
@@ -9,6 +10,8 @@ from pyrogram.types import InlineKeyboardMarkup, InlineKeyboardButton
 from telegram_runtime import Bot
 from telegram_stream import create_stream_token
 
+
+logger = logging.getLogger("telegram.handlers")
 
 APP_URL = (os.environ.get("DOPRAX_APP_URL") or os.environ.get("RENDER_EXTERNAL_URL") or "").strip()
 MAX_VIDEO_SIZE = int(os.environ.get("MAX_VIDEO_SIZE", str(2 * 1024 * 1024 * 1024)))
@@ -36,8 +39,21 @@ def get_app_base_url():
     return APP_URL.rstrip("/")
 
 
+# Diagnostic handler: confirms whether Telegram updates reach Pyrogram at all.
+# Group -1 lets the normal command/media handlers in group 0 run afterward.
+@Bot.on_message(filters.private & filters.incoming, group=-1)
+async def log_incoming_message(_, message):
+    logger.info(
+        "Incoming private message received: chat_id=%s message_id=%s type=%s",
+        message.chat.id if message.chat else None,
+        message.id,
+        message.media.value if message.media else ("text" if message.text else "other"),
+    )
+
+
 @Bot.on_message(filters.command(["start"]))
 async def start(bot, update):
+    logger.info("Handling /start from chat_id=%s", update.chat.id)
     await update.reply_text(
         text=START_TXT.format(update.from_user.mention),
         disable_web_page_preview=True,
@@ -47,6 +63,7 @@ async def start(bot, update):
 
 @Bot.on_message(filters.private & (filters.video | filters.document))
 async def receive_video(client, message):
+    logger.info("Handling video/document from chat_id=%s", message.chat.id)
     media = message.video or message.document
     if not media:
         return
@@ -76,15 +93,17 @@ async def receive_video(client, message):
         encoded_url = base64.b64encode(media_url.encode("utf-8")).decode("ascii")
         stream_url = f"{base_url}/play?id={quote_plus(encoded_url)}"
         await message.reply_text(
-            "Your video is ready to stream directly from Telegram:\n" + stream_url,
+            "Your video is ready to stream directly from Telegram:\\n" + stream_url,
             disable_web_page_preview=False,
         )
-    except Exception as exc:
-        await message.reply_text(f"Could not create the stream link: {exc}")
+    except Exception:
+        logger.exception("Failed to create stream link for chat_id=%s", message.chat.id)
+        await message.reply_text("Could not create the stream link. Please try again.")
 
 
 @Bot.on_message(filters.private & filters.text)
 async def st(_, m):
+    logger.info("Handling text message from chat_id=%s", m.chat.id)
     vid_url = m.text.strip()
     base_url = get_app_base_url()
     if not base_url:
