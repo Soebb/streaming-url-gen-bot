@@ -1,6 +1,7 @@
 """Shared Pyrogram client and event loop for the bot and HTTP streamer."""
 
 import asyncio
+import os
 import threading
 
 from pyrogram import Client, idle
@@ -8,9 +9,9 @@ from pyrogram import Client, idle
 
 Bot = Client(
     "vidstBot",
-    bot_token=__import__("os").environ["BOT_TOKEN"],
-    api_id=int(__import__("os").environ["API_ID"]),
-    api_hash=__import__("os").environ["API_HASH"],
+    bot_token=os.environ["BOT_TOKEN"],
+    api_id=int(os.environ["API_ID"]),
+    api_hash=os.environ["API_HASH"],
 )
 
 BOT_LOOP = None
