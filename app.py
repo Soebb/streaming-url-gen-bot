@@ -15,7 +15,7 @@ MEDIA_DIR = os.environ.get(
 )
 os.makedirs(MEDIA_DIR, exist_ok=True)
 MEDIA_FILENAME_RE = re.compile(
-    r"^[a-f0-9]{32}\\.(mp4|mkv|mov|webm|avi|m4v|mpeg|mpg|3gp|ts|wmv|flv)$",
+    r"^[a-f0-9]{32}\.(mp4|mkv|mov|webm|avi|m4v|mpeg|mpg|3gp|ts|wmv|flv)$",
     re.IGNORECASE,
 )
 
