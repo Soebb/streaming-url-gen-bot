@@ -3,6 +3,7 @@ import threading
 
 from waitress import serve
 
+import bot  # Register Telegram message handlers before starting the client.
 from app import app
 from telegram_runtime import run_bot, BOT_READY
 
