@@ -82,7 +82,7 @@ def telegram_media(token):
         abort(403)
 
     try:
-        message = _submit(_raw_method(Bot.get_messages)(chat_id, message_id))
+        message = _submit(_raw_method(Bot.get_messages)(chat_id=chat_id, message_ids=message_id))
     except Exception:
         app.logger.exception("Could not retrieve Telegram message")
         abort(502)
