@@ -1,4 +1,4 @@
-"""Shared Pyrogram client and event loop for the bot and HTTP streamer."""
+"""Shared Pyrogram client state for HTTP handlers."""
 
 import asyncio
 import os
@@ -19,23 +19,20 @@ BOT_READY = threading.Event()
 BOT_ERROR = None
 
 
-def run_bot():
+async def start_bot():
+    """Start Pyrogram on the main asyncio loop and keep that loop alive."""
     global BOT_LOOP, BOT_ERROR
 
     try:
-        # Start Pyrogram on this thread so its synchronous wrapper creates
-        # and owns the event loop that will also serve HTTP streaming calls.
-        Bot.start()
-        BOT_LOOP = asyncio.get_event_loop()
+        BOT_LOOP = asyncio.get_running_loop()
+        await Bot.start()
         BOT_READY.set()
-
-        # idle() installs OS signal handlers and therefore cannot run in this
-        # worker thread. Keep Pyrogram's loop alive without signal handling.
-        BOT_LOOP.run_forever()
     except Exception as exc:
         BOT_ERROR = exc
         BOT_READY.set()
         raise
-    finally:
-        if Bot.is_connected:
-            Bot.stop()
+
+
+async def stop_bot():
+    if Bot.is_connected:
+        await Bot.stop()
