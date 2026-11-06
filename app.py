@@ -1,12 +1,23 @@
 import os
+import re
 import requests
 from urllib.parse import unquote_plus
-from flask import Flask, jsonify, request
+from flask import Flask, jsonify, request, abort, send_from_directory
 from flask import render_template
 from yt_dlp import YoutubeDL
 from base64 import standard_b64decode
 
 app = Flask(__name__)
+
+# The bot and Flask app share this directory inside the same deployment.
+MEDIA_DIR = os.environ.get(
+    "MEDIA_DIR", os.path.join(os.path.dirname(os.path.abspath(__file__)), "media")
+)
+os.makedirs(MEDIA_DIR, exist_ok=True)
+MEDIA_FILENAME_RE = re.compile(
+    r"^[a-f0-9]{32}\.(mp4|mkv|mov|webm|avi|m4v|mpeg|mpg|3gp|ts|wmv|flv)$",
+    re.IGNORECASE,
+)
 
 
 def b64_to_str(b64: str) -> str:
@@ -15,9 +26,25 @@ def b64_to_str(b64: str) -> str:
     __str = bytes_str.decode('ascii')
     return __str
 
+
 @app.route("/")
 def homepage():
     return "Hello.."
+
+
+@app.route("/media/<filename>")
+def telegram_media(filename):
+    """Serve a bot-downloaded video with HTTP byte-range support for seeking."""
+    if not MEDIA_FILENAME_RE.fullmatch(filename):
+        abort(404)
+    return send_from_directory(
+        MEDIA_DIR,
+        filename,
+        as_attachment=False,
+        conditional=True,
+        max_age=0,
+    )
+
 
 @app.route("/yt")
 def youtube():
@@ -31,7 +58,7 @@ def youtube():
         info_dict = ydl.extract_info(url, download=False)
     video_name = info_dict['title']
     videos = [ {"format": format["height"], "url": format["url"]} for format in info_dict["formats"] if format["format_id"] in ["18", "22"] ]
-    # captions = info_dict["aut|safeomatic_captions"]
+    # captions = info_dict["automatic_captions"]
     captions = []
     video_captions = [ {caption: captions[caption][-1]["url"]} for caption in captions]
     return render_template(
@@ -72,6 +99,7 @@ def jw_payer():
         track_url=track_url,
     )
 
+
 @app.route("/play")
 def play():
     try:
@@ -100,6 +128,7 @@ def play():
         video_url=video_url,
         track_url=track_url,
     )
+
 
 @app.route("/m3u8")
 def m3u8():

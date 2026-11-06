@@ -1,8 +1,13 @@
-FROM alpine:latest
-RUN apk add --update --no-cache python3 multirun && ln -sf python3 /usr/bin/python
-RUN python3 -m ensurepip
+FROM python:3.11-alpine
+
+# Pin Python to 3.11 for Pyrogram asyncio compatibility.
+# Build tools are needed for native packages such as TgCrypto.
+RUN apk add --no-cache build-base multirun
+
 WORKDIR /app
 COPY . ./
-RUN pip3 install --no-cache --upgrade pip setuptools && pip3 install -r requirements.txt
+RUN pip install --no-cache-dir --upgrade pip setuptools \
+    && pip install --no-cache-dir -r requirements.txt
+
 EXPOSE 5000
-CMD multirun "python3 bot.py" "gunicorn -b :5000 --reload --access-logfile - --error-logfile - app:app"
+CMD multirun "python -u bot.py" "gunicorn -b :5000 --reload --access-logfile - --error-logfile - app:app"
