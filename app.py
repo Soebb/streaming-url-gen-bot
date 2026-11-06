@@ -32,8 +32,8 @@ def _submit(coro, timeout=60):
 
 
 def _raw_method(method):
-    # Pyrogram exposes synchronous wrappers; unwrap them to schedule the real
-    # coroutine on the bot's already-running event loop.
+    # Unwrap Pyrogram's synchronous wrapper. The raw function is unbound,
+    # so callers must explicitly pass the Client instance as its first arg.
     return inspect.unwrap(method)
 
 
@@ -41,7 +41,7 @@ def _parse_range(range_header, file_size):
     if not range_header:
         return 0, file_size - 1, 200
 
-    match = re.fullmatch(r"bytes=(\d*)-(\d*)", range_header.strip())
+    match = re.fullmatch(r"bytes=(\\d*)-(\\d*)", range_header.strip())
     if not match or (not match.group(1) and not match.group(2)):
         return None
 
@@ -82,7 +82,12 @@ def telegram_media(token):
         abort(403)
 
     try:
-        message = _submit(_raw_method(Bot.get_messages)(chat_id=chat_id, message_ids=message_id))
+        # inspect.unwrap() returns an unbound coroutine function.
+        message = _submit(
+            _raw_method(Bot.get_messages)(Bot, chat_id=chat_id, message_ids=message_id)
+        )
+        if isinstance(message, (list, tuple)):
+            message = message[0] if message else None
     except Exception:
         app.logger.exception("Could not retrieve Telegram message")
         abort(502)
@@ -133,7 +138,7 @@ def telegram_media(token):
     first_chunk_skip = start % chunk_size
     chunk_limit = ceil((first_chunk_skip + content_length) / chunk_size)
     telegram_generator = _raw_method(Bot.stream_media)(
-        message, offset=chunk_offset, limit=chunk_limit
+        Bot, message, offset=chunk_offset, limit=chunk_limit
     )
 
     def generate():
