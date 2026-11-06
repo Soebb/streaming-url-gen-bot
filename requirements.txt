@@ -1,5 +1,4 @@
-pyrogram==2.0.106
-tgcrypto
+pyrofork==2.3.69
 flask
 yt_dlp
 requests
