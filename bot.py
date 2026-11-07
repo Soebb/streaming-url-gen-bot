@@ -81,7 +81,7 @@ def handle_message(message):
         first_name = (message.get("from") or {}).get("first_name") or "there"
         reply(
             chat_id,
-            f"Hi {first_name}, I'm streaming link gen bot.\\n\\n"
+            f"Hi {first_name}, I'm streaming link gen bot.\n\n"
             "Send a YouTube video URL, a direct video download URL, or upload a video here.",
             message_id,
         )
@@ -113,7 +113,7 @@ def handle_message(message):
         stream_url = f"{base_url}/play?id={quote_plus(encoded_url)}"
         reply(
             chat_id,
-            "Your video is ready to stream directly from Telegram:\\n" + stream_url,
+            "Your video is ready to stream directly from Telegram:\n" + stream_url,
             message_id,
             disable_preview=False,
         )
