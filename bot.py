@@ -20,7 +20,7 @@ from telegram_stream import create_stream_token
 logger = logging.getLogger("telegram.handlers")
 BOT_TOKEN = os.environ["BOT_TOKEN"]
 BOT_API = f"https://api.telegram.org/bot{BOT_TOKEN}"
-APP_URL = (os.environ.get("DOPRAX_APP_URL") or os.environ.get("RENDER_EXTERNAL_URL") or "").strip()
+PUBLIC_BASE_URL = os.environ.get("PUBLIC_BASE_URL", "http://127.0.0.1:8000").strip()
 MAX_VIDEO_SIZE = int(os.environ.get("MAX_VIDEO_SIZE", str(2 * 1024 * 1024 * 1024)))
 ALLOWED_EXTENSIONS = {
     ".mp4", ".mkv", ".mov", ".webm", ".avi", ".m4v",
@@ -30,11 +30,11 @@ POLLING_STOP = threading.Event()
 
 
 def get_app_base_url():
-    if not APP_URL:
+    if not PUBLIC_BASE_URL:
         return None
-    if not re.match(r"^https?://", APP_URL, re.IGNORECASE):
-        return "https://" + APP_URL.rstrip("/")
-    return APP_URL.rstrip("/")
+    if not re.match(r"^https?://", PUBLIC_BASE_URL, re.IGNORECASE):
+        return "http://" + PUBLIC_BASE_URL.rstrip("/")
+    return PUBLIC_BASE_URL.rstrip("/")
 
 
 def api_call(method, payload=None, timeout=20):
