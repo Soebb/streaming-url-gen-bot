@@ -54,7 +54,7 @@ def _parse_range(range_header, file_size):
     if not range_header:
         return 0, file_size - 1, 200
 
-    match = re.fullmatch(r"bytes=(\\d*)-(\\d*)", range_header.strip())
+    match = re.fullmatch(r"bytes=(\d*)-(\d*)", range_header.strip())
     if not match or (not match.group(1) and not match.group(2)):
         return None
 
