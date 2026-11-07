@@ -1,15 +1,15 @@
-"""Telegram Bot API webhook handlers.
+"""Telegram Bot API long-polling handlers.
 
-Pyrogram is retained only for MTProto media retrieval/streaming. Telegram
-updates are delivered to the Render Web Service through an HTTPS webhook.
+Pyrogram is retained only for MTProto media retrieval/streaming. Updates are
+received through the official HTTPS Bot API to avoid the stalled MTProto
+updates stream observed on the deployment.
 """
 
 import base64
-import hashlib
-import hmac
 import logging
 import os
 import re
+import threading
 from urllib.parse import quote_plus, urlparse
 
 import requests
@@ -21,15 +21,12 @@ logger = logging.getLogger("telegram.handlers")
 BOT_TOKEN = os.environ["BOT_TOKEN"]
 BOT_API = f"https://api.telegram.org/bot{BOT_TOKEN}"
 APP_URL = (os.environ.get("DOPRAX_APP_URL") or os.environ.get("RENDER_EXTERNAL_URL") or "").strip()
-WEBHOOK_SECRET = (
-    os.environ.get("TELEGRAM_WEBHOOK_SECRET")
-    or hashlib.sha256(BOT_TOKEN.encode("utf-8")).hexdigest()
-)
 MAX_VIDEO_SIZE = int(os.environ.get("MAX_VIDEO_SIZE", str(2 * 1024 * 1024 * 1024)))
 ALLOWED_EXTENSIONS = {
     ".mp4", ".mkv", ".mov", ".webm", ".avi", ".m4v",
     ".mpeg", ".mpg", ".3gp", ".ts", ".wmv", ".flv",
 }
+POLLING_STOP = threading.Event()
 
 
 def get_app_base_url():
@@ -51,32 +48,6 @@ def api_call(method, payload=None, timeout=20):
     if not result.get("ok"):
         raise RuntimeError(f"Telegram Bot API {method} failed: {result}")
     return result["result"]
-
-
-def configure_webhook():
-    base_url = get_app_base_url()
-    if not base_url:
-        raise RuntimeError(
-            "RENDER_EXTERNAL_URL is missing; cannot configure the Telegram webhook."
-        )
-
-    webhook_url = f"{base_url}/telegram-webhook"
-    result = api_call(
-        "setWebhook",
-        {
-            "url": webhook_url,
-            "secret_token": WEBHOOK_SECRET,
-            "allowed_updates": ["message"],
-            "drop_pending_updates": False,
-        },
-    )
-    logger.info("Telegram webhook configured: %s (result=%s)", webhook_url, result)
-
-
-def verify_webhook_secret(received_secret):
-    return bool(received_secret) and hmac.compare_digest(
-        WEBHOOK_SECRET, received_secret
-    )
 
 
 def reply(chat_id, text, reply_to=None, disable_preview=True):
@@ -158,3 +129,51 @@ def handle_message(message):
         else:
             url = f"{base_url}/yt?id=" + quote_plus(text)
         reply(chat_id, url, message_id)
+
+
+def polling_loop():
+    logger.info("Starting Telegram Bot API long polling.")
+    try:
+        webhook = api_call("getWebhookInfo")
+        logger.info(
+            "Telegram webhook status before polling: configured=%s pending_updates=%s",
+            bool(webhook.get("url")),
+            webhook.get("pending_update_count", 0),
+        )
+        if webhook.get("url"):
+            api_call("deleteWebhook", {"drop_pending_updates": False})
+            logger.warning("Removed existing Telegram webhook to enable long polling.")
+
+        me = api_call("getMe")
+        logger.info("Telegram Bot API authenticated as @%s (id=%s).", me.get("username"), me.get("id"))
+    except Exception:
+        logger.exception("Telegram Bot API initialization failed.")
+        return
+
+    offset = None
+    while not POLLING_STOP.is_set():
+        try:
+            payload = {"timeout": 50, "allowed_updates": ["message"]}
+            if offset is not None:
+                payload["offset"] = offset
+            updates = api_call("getUpdates", payload, timeout=65)
+            for update in updates:
+                offset = update["update_id"] + 1
+                message = update.get("message")
+                if not message:
+                    continue
+                try:
+                    handle_message(message)
+                except Exception:
+                    logger.exception(
+                        "Failed to process Telegram update_id=%s",
+                        update.get("update_id"),
+                    )
+        except requests.RequestException:
+            logger.exception("Telegram long-poll request failed; retrying in 5 seconds.")
+            POLLING_STOP.wait(5)
+        except Exception:
+            logger.exception("Telegram polling failed; retrying in 5 seconds.")
+            POLLING_STOP.wait(5)
+
+    logger.info("Telegram Bot API polling stopped.")
