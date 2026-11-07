@@ -1,4 +1,4 @@
-"""Application entry point: Pyrogram media client + Telegram webhook + HTTP server."""
+"""Application entry point: Pyrogram media client + Bot API polling."""
 
 import asyncio
 import logging
@@ -8,7 +8,7 @@ import threading
 import bot
 from app import app
 from telegram_runtime import start_bot, stop_bot
-from waitress import create_server
+from waitress import serve
 
 
 logging.basicConfig(
@@ -16,20 +16,24 @@ logging.basicConfig(
     format="%(asctime)s %(levelname)s %(name)s: %(message)s",
 )
 logger = logging.getLogger("runner")
-HTTP_READY = threading.Event()
 
 
 def run_http_server():
     port = int(os.environ.get("PORT", "10000"))
     logger.info("Starting HTTP server on 0.0.0.0:%s", port)
-    server = create_server(app, host="0.0.0.0", port=port, threads=8)
-    HTTP_READY.set()
-    server.run()
+    serve(app, host="0.0.0.0", port=port, threads=8)
 
 
 async def main():
     logger.info("Starting Pyrogram media client...")
     await start_bot()
+
+    polling_thread = threading.Thread(
+        target=bot.polling_loop,
+        name="telegram-bot-api-polling",
+        daemon=True,
+    )
+    polling_thread.start()
 
     http_thread = threading.Thread(
         target=run_http_server,
@@ -37,17 +41,13 @@ async def main():
         daemon=True,
     )
     http_thread.start()
-
-    if not HTTP_READY.wait(timeout=20):
-        raise RuntimeError("HTTP server did not become ready in time.")
-
-    bot.configure_webhook()
-    logger.info("HTTP server and Telegram webhook are ready.")
+    logger.info("HTTP server and Telegram Bot API polling threads started.")
 
     try:
         await asyncio.Event().wait()
     finally:
-        logger.info("Stopping Pyrogram media client...")
+        logger.info("Stopping Telegram services...")
+        bot.POLLING_STOP.set()
         await stop_bot()
 
 
