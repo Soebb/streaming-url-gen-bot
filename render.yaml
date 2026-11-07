@@ -4,7 +4,7 @@ services:
     runtime: docker
     plan: free
     region: frankfurt
-    branch: feature/telegram-direct-streaming
+    branch: render
     dockerfilePath: ./Dockerfile
     dockerContext: .
     healthCheckPath: /
