@@ -7,7 +7,7 @@ from math import ceil
 from urllib.parse import unquote_plus
 
 import requests
-from flask import Flask, request, abort, Response, render_template
+from flask import Flask, request, abort, Response, render_template, g
 from werkzeug.utils import secure_filename
 from yt_dlp import YoutubeDL
 
@@ -18,6 +18,17 @@ from telegram_stream import decode_stream_token
 
 
 app = Flask(__name__)
+
+
+@app.before_request
+def log_incoming_request():
+    app.logger.info("HTTP request: method=%s path=%s range=%s", request.method, request.path, request.headers.get("Range"))
+
+
+@app.after_request
+def log_outgoing_response(response):
+    app.logger.info("HTTP response: method=%s path=%s status=%s content_type=%s", request.method, request.path, response.status_code, response.content_type)
+    return response
 
 
 def b64_to_str(b64: str) -> str:
@@ -111,6 +122,7 @@ def telegram_media(token):
         )
 
     start, end, status_code = parsed_range
+    app.logger.info("Telegram media request accepted: chat_id=%s message_id=%s range=%s-%s file_size=%s", chat_id, message_id, start, end, file_size)
     content_length = end - start + 1
     file_name = getattr(media, "file_name", "") or "video"
     mime_type = getattr(media, "mime_type", None) or ""
@@ -137,6 +149,7 @@ def telegram_media(token):
     chunk_offset = start // chunk_size
     first_chunk_skip = start % chunk_size
     chunk_limit = ceil((first_chunk_skip + content_length) / chunk_size)
+    app.logger.info("Starting Telegram stream: message_id=%s offset=%s limit=%s", message_id, chunk_offset, chunk_limit)
     telegram_generator = _raw_method(Bot.stream_media)(
         Bot, message, offset=chunk_offset, limit=chunk_limit
     )
