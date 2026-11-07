@@ -19,9 +19,10 @@ logger = logging.getLogger("runner")
 
 
 def run_http_server():
-    port = int(os.environ.get("PORT", "10000"))
-    logger.info("Starting HTTP server on 0.0.0.0:%s", port)
-    serve(app, host="0.0.0.0", port=port, threads=8)
+    host = os.environ.get("HOST", "127.0.0.1")
+    port = int(os.environ.get("PORT", "8000"))
+    logger.info("Starting local HTTP server on %s:%s", host, port)
+    serve(app, host=host, port=port, threads=8)
 
 
 async def main():
