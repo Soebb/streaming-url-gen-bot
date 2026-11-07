@@ -1,5 +1,4 @@
 import asyncio
-import hmac
 import inspect
 import mimetypes
 import os
@@ -8,11 +7,10 @@ from math import ceil
 from urllib.parse import unquote_plus
 
 import requests
-from flask import Flask, request, abort, Response, render_template, jsonify
+from flask import Flask, request, abort, Response, render_template, g
 from werkzeug.utils import secure_filename
 from yt_dlp import YoutubeDL
 
-import bot as telegram_bot
 import telegram_runtime
 
 Bot = telegram_runtime.Bot
@@ -87,23 +85,6 @@ def homepage():
     return "Hello.."
 
 
-@app.route("/telegram-webhook", methods=["POST"])
-def telegram_webhook():
-    supplied_secret = request.headers.get("X-Telegram-Bot-Api-Secret-Token", "")
-    if not telegram_bot.verify_webhook_secret(supplied_secret):
-        abort(403)
-
-    update = request.get_json(silent=True)
-    if not isinstance(update, dict):
-        return jsonify({"ok": False, "description": "Invalid update"}), 400
-
-    message = update.get("message")
-    if message:
-        telegram_bot.handle_message(message)
-
-    return jsonify({"ok": True})
-
-
 @app.route("/tg/<token>", methods=["GET", "HEAD"])
 def telegram_media(token):
     try:
@@ -112,6 +93,7 @@ def telegram_media(token):
         abort(403)
 
     try:
+        # inspect.unwrap() returns an unbound coroutine function.
         message = _submit(
             _raw_method(Bot.get_messages)(Bot, chat_id=chat_id, message_ids=message_id)
         )
