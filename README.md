@@ -1,6 +1,6 @@
 # Telegram Video Streaming Bot (Local)
 
-Run the bot and video streaming server on your own computer. No Render account or Docker is required.
+Run the bot and video streaming server on your own computer.
 
 ## Requirements
 
