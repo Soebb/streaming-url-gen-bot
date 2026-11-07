@@ -1,43 +1,32 @@
+"""Telegram Bot API long-polling handlers.
+
+Pyrogram is retained only for MTProto media retrieval/streaming. Updates are
+received through the official HTTPS Bot API to avoid the stalled MTProto
+updates stream observed on the deployment.
+"""
+
 import base64
-import mimetypes
+import logging
 import os
 import re
-import uuid
+import threading
 from urllib.parse import quote_plus, urlparse
 
-from pyrogram import Client, filters
-from pyrogram.types import InlineKeyboardMarkup, InlineKeyboardButton
+import requests
+
+from telegram_stream import create_stream_token
 
 
+logger = logging.getLogger("telegram.handlers")
+BOT_TOKEN = os.environ["BOT_TOKEN"]
+BOT_API = f"https://api.telegram.org/bot{BOT_TOKEN}"
 APP_URL = (os.environ.get("DOPRAX_APP_URL") or os.environ.get("RENDER_EXTERNAL_URL") or "").strip()
-MEDIA_DIR = os.environ.get(
-    "MEDIA_DIR", os.path.join(os.path.dirname(os.path.abspath(__file__)), "media")
-)
 MAX_VIDEO_SIZE = int(os.environ.get("MAX_VIDEO_SIZE", str(2 * 1024 * 1024 * 1024)))
 ALLOWED_EXTENSIONS = {
     ".mp4", ".mkv", ".mov", ".webm", ".avi", ".m4v",
     ".mpeg", ".mpg", ".3gp", ".ts", ".wmv", ".flv",
 }
-
-os.makedirs(MEDIA_DIR, exist_ok=True)
-
-Bot = Client(
-    "vidstBot",
-    bot_token=os.environ["BOT_TOKEN"],
-    api_id=int(os.environ["API_ID"]),
-    api_hash=os.environ["API_HASH"],
-)
-
-
-START_TXT = """
-Hi {}, I'm streaming link gen bot.
-
-Send a YouTube video URL, a direct video download URL, or upload a video here.
-"""
-
-START_BTN = InlineKeyboardMarkup(
-    [[InlineKeyboardButton("Source Code", url="https://github.com/soebb")]]
-)
+POLLING_STOP = threading.Event()
 
 
 def get_app_base_url():
@@ -48,86 +37,143 @@ def get_app_base_url():
     return APP_URL.rstrip("/")
 
 
-@Bot.on_message(filters.command(["start"]))
-async def start(bot, update):
-    await update.reply_text(
-        text=START_TXT.format(update.from_user.mention),
-        disable_web_page_preview=True,
-        reply_markup=START_BTN,
+def api_call(method, payload=None, timeout=20):
+    response = requests.post(
+        f"{BOT_API}/{method}",
+        json=payload or {},
+        timeout=timeout,
+    )
+    response.raise_for_status()
+    result = response.json()
+    if not result.get("ok"):
+        raise RuntimeError(f"Telegram Bot API {method} failed: {result}")
+    return result["result"]
+
+
+def reply(chat_id, text, reply_to=None, disable_preview=True):
+    payload = {
+        "chat_id": chat_id,
+        "text": text,
+        "disable_web_page_preview": disable_preview,
+    }
+    if reply_to is not None:
+        payload["reply_to_message_id"] = reply_to
+        payload["allow_sending_without_reply"] = True
+    api_call("sendMessage", payload)
+
+
+def handle_message(message):
+    chat = message.get("chat") or {}
+    if chat.get("type") != "private":
+        return
+
+    chat_id = chat.get("id")
+    message_id = message.get("message_id")
+    text = (message.get("text") or "").strip()
+    logger.info(
+        "Incoming private message received: chat_id=%s message_id=%s type=%s",
+        chat_id,
+        message_id,
+        "video" if message.get("video") else "document" if message.get("document") else "text" if text else "other",
     )
 
-
-@Bot.on_message(filters.private & (filters.video | filters.document))
-async def receive_video(client, message):
-    media = message.video or message.document
-    if not media:
+    if text and text.split(maxsplit=1)[0].split("@")[0] == "/start":
+        first_name = (message.get("from") or {}).get("first_name") or "there"
+        reply(
+            chat_id,
+            f"Hi {first_name}, I'm streaming link gen bot.\n\n"
+            "Send a YouTube video URL, a direct video download URL, or upload a video here.",
+            message_id,
+        )
         return
 
-    original_name = getattr(media, "file_name", None) or "video.mp4"
-    extension = os.path.splitext(os.path.basename(original_name))[1].lower()
-    mime_type = (getattr(media, "mime_type", None) or "").lower()
-
-    # Documents are accepted only when their MIME type or extension indicates video.
-    if not (mime_type.startswith("video/") or extension in ALLOWED_EXTENSIONS):
-        await message.reply_text("Please send a video file (as a video or document).")
-        return
-
-    if extension not in ALLOWED_EXTENSIONS:
-        guessed_extension = mimetypes.guess_extension(mime_type) if mime_type else None
-        extension = guessed_extension if guessed_extension in ALLOWED_EXTENSIONS else ".mp4"
-
-    file_size = getattr(media, "file_size", 0) or 0
-    if file_size and file_size > MAX_VIDEO_SIZE:
-        max_mb = MAX_VIDEO_SIZE // (1024 * 1024)
-        await message.reply_text(f"Video is too large. Maximum allowed size is {max_mb} MB.")
-        return
-
-    base_url = get_app_base_url()
-    if not base_url:
-        await message.reply_text("The bot administrator has not configured DOPRAX_APP_URL.")
-        return
-
-    stored_name = f"{uuid.uuid4().hex}{extension}"
-    target_path = os.path.join(MEDIA_DIR, stored_name)
-    status = await message.reply_text("Downloading your video from Telegram...")
-
-    try:
-        downloaded_path = await client.download_media(message, file_name=target_path)
-        if not downloaded_path or not os.path.isfile(downloaded_path):
-            await status.edit_text("Download failed. Please try sending the video again.")
+    media = message.get("video") or message.get("document")
+    if media:
+        original_name = media.get("file_name") or "video.mp4"
+        extension = os.path.splitext(os.path.basename(original_name))[1].lower()
+        mime_type = (media.get("mime_type") or "").lower()
+        if not (mime_type.startswith("video/") or extension in ALLOWED_EXTENSIONS):
+            reply(chat_id, "Please send a video file (as a video or document).", message_id)
             return
 
-        media_url = f"{base_url}/media/{stored_name}"
+        file_size = int(media.get("file_size") or 0)
+        if file_size and file_size > MAX_VIDEO_SIZE:
+            max_mb = MAX_VIDEO_SIZE // (1024 * 1024)
+            reply(chat_id, f"Video is too large. Maximum allowed size is {max_mb} MB.", message_id)
+            return
+
+        base_url = get_app_base_url()
+        if not base_url:
+            reply(chat_id, "The bot administrator has not configured the public app URL.", message_id)
+            return
+
+        token = create_stream_token(chat_id, message_id)
+        media_url = f"{base_url}/tg/{token}"
         encoded_url = base64.b64encode(media_url.encode("utf-8")).decode("ascii")
         stream_url = f"{base_url}/play?id={quote_plus(encoded_url)}"
-
-        await status.edit_text(
-            "Your video is ready to stream:\n" + stream_url,
-            disable_web_page_preview=False,
+        reply(
+            chat_id,
+            "Your video is ready to stream directly from Telegram:\n" + stream_url,
+            message_id,
+            disable_preview=False,
         )
-    except Exception as exc:
-        if os.path.exists(target_path):
-            try:
-                os.remove(target_path)
-            except OSError:
-                pass
-        await status.edit_text(f"Could not download the video: {exc}")
-
-
-@Bot.on_message(filters.private & filters.text)
-async def st(_, m):
-    vid_url = m.text.strip()
-    base_url = get_app_base_url()
-    if not base_url:
-        await m.reply_text("The bot administrator has not configured DOPRAX_APP_URL.")
         return
 
-    if os.path.splitext(urlparse(vid_url).path)[1].lower() in ALLOWED_EXTENSIONS:
-        url = f"{base_url}/play?id=" + quote_plus(vid_url) + "&en=0"
-    else:
-        url = f"{base_url}/yt?id=" + quote_plus(vid_url)
+    if text:
+        base_url = get_app_base_url()
+        if not base_url:
+            reply(chat_id, "The bot administrator has not configured the public app URL.", message_id)
+            return
+        if os.path.splitext(urlparse(text).path)[1].lower() in ALLOWED_EXTENSIONS:
+            url = f"{base_url}/play?id=" + quote_plus(text) + "&en=0"
+        else:
+            url = f"{base_url}/yt?id=" + quote_plus(text)
+        reply(chat_id, url, message_id)
 
-    await m.reply(url)
 
+def polling_loop():
+    logger.info("Starting Telegram Bot API long polling.")
+    try:
+        webhook = api_call("getWebhookInfo")
+        logger.info(
+            "Telegram webhook status before polling: configured=%s pending_updates=%s",
+            bool(webhook.get("url")),
+            webhook.get("pending_update_count", 0),
+        )
+        if webhook.get("url"):
+            api_call("deleteWebhook", {"drop_pending_updates": False})
+            logger.warning("Removed existing Telegram webhook to enable long polling.")
 
-Bot.run()
+        me = api_call("getMe")
+        logger.info("Telegram Bot API authenticated as @%s (id=%s).", me.get("username"), me.get("id"))
+    except Exception:
+        logger.exception("Telegram Bot API initialization failed.")
+        return
+
+    offset = None
+    while not POLLING_STOP.is_set():
+        try:
+            payload = {"timeout": 50, "allowed_updates": ["message"]}
+            if offset is not None:
+                payload["offset"] = offset
+            updates = api_call("getUpdates", payload, timeout=65)
+            for update in updates:
+                offset = update["update_id"] + 1
+                message = update.get("message")
+                if not message:
+                    continue
+                try:
+                    handle_message(message)
+                except Exception:
+                    logger.exception(
+                        "Failed to process Telegram update_id=%s",
+                        update.get("update_id"),
+                    )
+        except requests.RequestException:
+            logger.exception("Telegram long-poll request failed; retrying in 5 seconds.")
+            POLLING_STOP.wait(5)
+        except Exception:
+            logger.exception("Telegram polling failed; retrying in 5 seconds.")
+            POLLING_STOP.wait(5)
+
+    logger.info("Telegram Bot API polling stopped.")
